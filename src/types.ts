@@ -11,6 +11,9 @@ export interface Pub {
   description: string;
   distanceFromPrevious: number; // in meters or km
   drinks: Drink[];
+  website?: string;
+  phone?: string;
+  openingHours?: string;
   coordinates?: {
     lat: number;
     lng: number;

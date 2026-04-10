@@ -12,7 +12,10 @@ import {
   Search,
   ArrowRight,
   Info,
-  Dices
+  Dices,
+  Globe,
+  Phone,
+  Clock
 } from "lucide-react";
 import { generatePubCrawl } from "../services/pubService";
 import { PubCrawl, Pub } from "../types";
@@ -243,7 +246,44 @@ export default function PubCrawlPlanner() {
                             Current Stop
                           </div>
                           <h1 className="text-4xl md:text-5xl font-bold tracking-tight">{currentPub?.name}</h1>
-                          <p className="text-white/60 max-w-xl">{currentPub?.description}</p>
+                          <div className="flex flex-col gap-4">
+                            <p className="text-white/60 max-w-xl">{currentPub?.description}</p>
+                            
+                            <div className="flex flex-wrap gap-4 text-sm text-white/40">
+                              {currentPub?.openingHours && (
+                                <div className="flex items-center gap-1.5">
+                                  <Clock className="w-4 h-4 text-orange-500/60" />
+                                  <span>{currentPub.openingHours}</span>
+                                </div>
+                              )}
+                              {currentPub?.phone && (
+                                <div className="flex items-center gap-1.5">
+                                  <Phone className="w-4 h-4 text-orange-500/60" />
+                                  <span>{currentPub.phone}</span>
+                                </div>
+                              )}
+                              {currentPub?.website && (
+                                <a 
+                                  href={currentPub.website.startsWith('http') ? currentPub.website : `https://${currentPub.website}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center gap-1.5 hover:text-orange-500 transition-colors"
+                                >
+                                  <Globe className="w-4 h-4 text-orange-500/60" />
+                                  <span>Website</span>
+                                </a>
+                              )}
+                              <a 
+                                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${currentPub?.name} ${currentPub?.address}`)}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-1.5 hover:text-orange-500 transition-colors"
+                              >
+                                <Navigation className="w-4 h-4 text-orange-500/60" />
+                                <span>Directions</span>
+                              </a>
+                            </div>
+                          </div>
                         </div>
                         <div className="flex gap-2">
                           <button 
@@ -266,25 +306,46 @@ export default function PubCrawlPlanner() {
                       <div className="grid md:grid-cols-2 gap-8">
                         {/* Pre-order Menu */}
                         <div className="space-y-4">
-                          <h3 className="flex items-center gap-2 font-bold text-lg">
-                            <GlassWater className="w-5 h-5 text-orange-500" />
-                            Order Ahead
-                          </h3>
+                          <div className="flex flex-col gap-2">
+                            <div className="flex items-center justify-between">
+                              <h3 className="flex items-center gap-2 font-bold text-lg">
+                                <GlassWater className="w-5 h-5 text-orange-500" />
+                                Order Ahead
+                              </h3>
+                              <a 
+                                href={`https://www.google.com/search?q=${encodeURIComponent(`${currentPub?.name} ${currentPub?.address} menu`)}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-xs text-orange-500 hover:underline flex items-center gap-1"
+                              >
+                                <Search className="w-3 h-3" />
+                                Official Menu
+                              </a>
+                            </div>
+                            <p className="text-[10px] text-white/30 uppercase tracking-wider font-medium">Typical Menu & Estimated Prices</p>
+                          </div>
                           <div className="space-y-2">
-                            {currentPub?.drinks.map((drink, i) => (
-                              <div key={i} className="flex items-center justify-between p-4 rounded-2xl bg-white/5 border border-white/5 hover:border-white/20 transition-all group cursor-pointer">
-                                <div>
-                                  <p className="font-bold">{drink.name}</p>
-                                  <p className="text-xs text-white/40">{drink.category}</p>
-                                </div>
-                                <div className="flex items-center gap-4">
-                                  <span className="font-mono text-orange-500">{drink.price}</span>
-                                  <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center group-hover:bg-orange-500 group-hover:text-black transition-all">
-                                    <ChevronRight className="w-4 h-4" />
+                            {currentPub?.drinks && currentPub.drinks.length > 0 ? (
+                              currentPub.drinks.map((drink, i) => (
+                                <div key={i} className="flex items-center justify-between p-4 rounded-2xl bg-white/5 border border-white/5 hover:border-white/20 transition-all group cursor-pointer">
+                                  <div>
+                                    <p className="font-bold">{drink.name}</p>
+                                    <p className="text-xs text-white/40">{drink.category}</p>
+                                  </div>
+                                  <div className="flex items-center gap-4">
+                                    <span className="font-mono text-orange-500">{drink.price}</span>
+                                    <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center group-hover:bg-orange-500 group-hover:text-black transition-all">
+                                      <ChevronRight className="w-4 h-4" />
+                                    </div>
                                   </div>
                                 </div>
+                              ))
+                            ) : (
+                              <div className="p-8 rounded-2xl border border-dashed border-white/10 flex flex-col items-center justify-center text-center space-y-2">
+                                <Info className="w-6 h-6 text-white/20" />
+                                <p className="text-white/40 text-sm font-medium">no menu available</p>
                               </div>
-                            ))}
+                            )}
                           </div>
                         </div>
 
