@@ -14,7 +14,7 @@ import {
   Info,
   Dices
 } from "lucide-react";
-import { generatePubCrawl } from "../services/geminiService";
+import { generatePubCrawl } from "../services/pubService";
 import { PubCrawl, Pub } from "../types";
 import { cn } from "../lib/utils";
 import DrinkGenerator from "./DrinkGenerator";
@@ -100,7 +100,7 @@ export default function PubCrawlPlanner() {
           </div>
         </div>
       </header>
-
+      
       <main className="max-w-7xl mx-auto px-4 py-8">
         {!crawl ? (
           <motion.div 
