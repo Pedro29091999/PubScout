@@ -21,7 +21,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: '20'
           cache: 'npm'
 
       - name: Install dependencies
@@ -31,9 +31,16 @@ jobs:
         run: npm run build
 
       - name: Build Android APK
+        run: npx cap sync
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Build with Gradle
         run: |
-          npx cap sync
           cd android
+          # If wrapper is corrupt, try to regenerate it using system gradle
+          gradle wrapper || echo "Failed to regenerate wrapper, continuing with system gradle"
           chmod +x gradlew
           ./gradlew assembleDebug
 
