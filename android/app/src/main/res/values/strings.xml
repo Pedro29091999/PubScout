@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">PubScout</string>
+    <string name="title_activity_main">PubScout</string>
+    <string name="package_name">com.pubscout.app</string>
+    <string name="custom_url_scheme">com.pubscout.app</string>
+</resources>
