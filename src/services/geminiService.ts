@@ -1,13 +1,25 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { PubCrawl } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+let aiInstance: GoogleGenAI | null = null;
+
+function getAI() {
+  if (!aiInstance) {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      throw new Error("GEMINI_API_KEY is not set. Please check your environment variables.");
+    }
+    aiInstance = new GoogleGenAI({ apiKey });
+  }
+  return aiInstance;
+}
 
 export async function generatePubCrawl(
   location: string,
   numPubs: number,
   maxDistanceBetween: number
 ): Promise<PubCrawl> {
+  const ai = getAI();
   const prompt = `Suggest a pub crawl route in ${location} with exactly ${numPubs} pubs. 
   The distance between each consecutive pub should be roughly around or less than ${maxDistanceBetween} meters if possible.
   For each pub, provide a realistic drinks menu (at least 5 items).
