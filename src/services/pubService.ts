@@ -5,7 +5,7 @@ let aiInstance: GoogleGenAI | null = null;
 
 function getAI() {
   if (!aiInstance) {
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
     console.log("Gemini: Initializing with API key present:", !!apiKey);
     if (!apiKey) {
       console.error("Gemini: GEMINI_API_KEY is missing from environment.");
