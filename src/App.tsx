@@ -10,8 +10,12 @@ import { initializeAdMob, showAppOpenAd } from "./services/admobService";
 export default function App() {
   useEffect(() => {
     const startAdMob = async () => {
-      await initializeAdMob();
-      await showAppOpenAd();
+      try {
+        await initializeAdMob();
+        await showAppOpenAd();
+      } catch (e) {
+        console.error("AdMob startup failed", e);
+      }
     };
     startAdMob();
   }, []);

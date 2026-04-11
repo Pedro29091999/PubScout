@@ -1,4 +1,3 @@
-import { AdMob, AdOptions, AdMobError, AdLoadInfo } from '@capacitor-community/admob';
 import { Capacitor } from '@capacitor/core';
 
 const APP_OPEN_AD_UNIT_ID = 'ca-app-pub-8748344406083155/3761085560';
@@ -10,6 +9,7 @@ export async function initializeAdMob() {
   }
 
   try {
+    const { AdMob } = await import('@capacitor-community/admob');
     await AdMob.initialize({
       testingDevices: [],
       initializeForTesting: false,
@@ -34,12 +34,13 @@ export async function initializeAdMob() {
 export async function showAppOpenAd() {
   if (!Capacitor.isNativePlatform()) return;
 
-  const options: AdOptions = {
-    adId: APP_OPEN_AD_UNIT_ID,
-    isTesting: false,
-  };
-
   try {
+    const { AdMob } = await import('@capacitor-community/admob');
+    const options = {
+      adId: APP_OPEN_AD_UNIT_ID,
+      isTesting: false,
+    };
+
     await AdMob.prepareInterstitial(options);
     await AdMob.showInterstitial();
     console.log('AdMob: Startup Ad (Interstitial) shown.');

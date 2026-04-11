@@ -9,7 +9,8 @@ export default defineConfig(({mode}) => {
     base: './',
     plugins: [react(), tailwindcss()],
     define: {
-      'process.env': env,
+      'process.env': JSON.stringify(env),
+      'global': {},
     },
     resolve: {
       alias: {
