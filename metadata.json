@@ -1,5 +1,5 @@
 {
   "name": "PubScout: Local Pub Crawl Planner",
-  "description": "Plan the perfect pub crawl with local venue suggestions, distance filters, and pre-order drink menus.",
+  "description": "Plan the perfect pub crawl with local venue suggestions, distance filters, and interactive maps.",
   "requestFramePermissions": ["geolocation"]
 }

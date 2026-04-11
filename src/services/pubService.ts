@@ -1,7 +1,45 @@
 import { PubCrawl, Pub, Drink, Taxi } from "../types";
+import { GoogleGenAI, Type } from "@google/genai";
+
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+
+// Caching helpers
+const CACHE_PREFIX = "pubscout_v1_";
+const CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
+
+function getFromCache<T>(key: string): T | null {
+  try {
+    const item = localStorage.getItem(CACHE_PREFIX + key);
+    if (!item) return null;
+    const entry = JSON.parse(item);
+    if (Date.now() - entry.timestamp > CACHE_TTL) {
+      localStorage.removeItem(CACHE_PREFIX + key);
+      return null;
+    }
+    return entry.data;
+  } catch (e) {
+    return null;
+  }
+}
+
+function saveToCache<T>(key: string, data: T) {
+  try {
+    const entry = { data, timestamp: Date.now() };
+    localStorage.setItem(CACHE_PREFIX + key, JSON.stringify(entry));
+  } catch (e) {
+    // If quota exceeded, clear old cache and try once more
+    if (e instanceof Error && e.name === 'QuotaExceededError') {
+      localStorage.clear();
+    }
+  }
+}
 
 // Nominatim API for geocoding (City name -> Lat/Lng)
 async function geocode(location: string): Promise<{ lat: number; lng: number } | null> {
+  const cacheKey = `geo_${location.toLowerCase().trim()}`;
+  const cached = getFromCache<{ lat: number; lng: number }>(cacheKey);
+  if (cached) return cached;
+
   try {
     const response = await fetch(
       `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(location)}&limit=1`,
@@ -20,10 +58,12 @@ async function geocode(location: string): Promise<{ lat: number; lng: number } |
     if (contentType && contentType.includes("application/json")) {
       const data = await response.json();
       if (data && data.length > 0) {
-        return {
+        const result = {
           lat: parseFloat(data[0].lat),
           lng: parseFloat(data[0].lon)
         };
+        saveToCache(cacheKey, result);
+        return result;
       }
     }
   } catch (error) {
@@ -231,6 +271,42 @@ function getRealisticDrinks(pubName: string, tags: any): Drink[] {
   return [];
 }
 
+export async function fetchAccurateMenu(pubName: string, address: string): Promise<Drink[]> {
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: `Find the current drink menu and prices for "${pubName}" at "${address}". 
+      Focus on popular drinks like beers, cocktails, and spirits. 
+      If exact prices are not found, provide realistic estimates based on the venue's style and location.
+      Return the data as a list of drinks with name, price, and category.`,
+      config: {
+        tools: [{ googleSearch: {} }],
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              name: { type: Type.STRING },
+              price: { type: Type.STRING },
+              category: { type: Type.STRING }
+            },
+            required: ["name", "price", "category"]
+          }
+        }
+      }
+    });
+
+    const text = response.text;
+    if (!text) return [];
+    const drinks = JSON.parse(text);
+    return drinks;
+  } catch (error) {
+    console.error(`Failed to fetch accurate menu for ${pubName}:`, error);
+    return [];
+  }
+}
+
 function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6371e3; // metres
   const φ1 = lat1 * Math.PI/180;
@@ -246,11 +322,11 @@ function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
   return Math.round(R * c);
 }
 
-export async function generatePubCrawl(
-  location: string,
-  numPubs: number,
-  maxDistanceBetween: number
-): Promise<PubCrawl> {
+export async function fetchAllAvailablePubs(location: string): Promise<{ pubs: Pub[], lat: number, lng: number }> {
+  const cacheKey = `pubs_${location.toLowerCase().trim()}`;
+  const cached = getFromCache<{ pubs: Pub[], lat: number, lng: number }>(cacheKey);
+  if (cached) return cached;
+
   let lat: number, lng: number;
 
   // Check if location is already coordinates
@@ -265,10 +341,8 @@ export async function generatePubCrawl(
     lng = coords.lng;
   }
 
-  // Fetch pubs in a moderate radius initially to reduce server load
+  // Fetch pubs in a moderate radius initially
   let elements = await fetchPubs(lat, lng, 1500);
-  
-  // If no pubs found, try a larger radius as a fallback
   if (elements.length === 0) {
     elements = await fetchPubs(lat, lng, 3000);
   }
@@ -277,41 +351,16 @@ export async function generatePubCrawl(
     throw new Error("No pubs found in this area.");
   }
 
-  // Map to our Pub type
-  const allPubs: Pub[] = elements
+  const pubs: Pub[] = elements
     .filter(el => {
       if (!el.tags || !el.tags.name) return false;
-      
-      // Exclude things that are definitely not pubs despite the tag
       const name = el.tags.name.toLowerCase();
-      const excludeKeywords = [
-        "club", "nightclub", "disco", "gentlemen's club", "strip club", 
-        "hotel", "restaurant", "training", "provider", "academy", 
-        "school", "college", "office", "consultancy", "business center",
-        "medical", "hospital", "clinic", "church", "mosque", "temple"
-      ];
-      
-      // Only exclude if it's ONLY a restaurant/hotel and not primarily a pub
-      // (Many pubs are in hotels or serve food, so we check if 'pub' is the main amenity)
+      const excludeKeywords = ["club", "nightclub", "disco", "gentlemen's club", "strip club", "hotel", "restaurant", "training", "provider", "academy", "school", "college", "office", "consultancy", "business center", "medical", "hospital", "clinic", "church", "mosque", "temple"];
       if (el.tags.amenity !== "pub") return false;
-
-      // Exclude closed, disused, or abandoned venues
-      if (el.tags.disused === "yes" || 
-          el.tags.abandoned === "yes" || 
-          el.tags.closed === "yes" ||
-          el.tags.vacant === "yes" ||
-          el.tags.status === "closed" ||
-          el.tags.description?.toLowerCase().includes("permanently closed") ||
-          el.tags.note?.toLowerCase().includes("closed")) {
-        return false;
-      }
-      
-      // Filter out some obvious non-pub matches that might slip through
+      if (el.tags.disused === "yes" || el.tags.abandoned === "yes" || el.tags.closed === "yes" || el.tags.vacant === "yes" || el.tags.status === "closed" || el.tags.description?.toLowerCase().includes("permanently closed") || el.tags.note?.toLowerCase().includes("closed")) return false;
       if (excludeKeywords.some(k => name.includes(k) && !name.includes("pub"))) {
-        // Exception: if it's a "Pub & Restaurant" it's fine
         if (!name.includes("pub")) return false;
       }
-
       return true;
     })
     .map(el => ({
@@ -330,29 +379,53 @@ export async function generatePubCrawl(
       }
     }));
 
-  // Simple greedy algorithm to find a route
+  const result = { pubs, lat, lng };
+  saveToCache(cacheKey, result);
+  return result;
+}
+
+export function createCrawlFromPubs(
+  allPubs: Pub[], 
+  startLat: number, 
+  startLng: number, 
+  numPubs: number, 
+  locationName: string,
+  randomize: boolean = false
+): PubCrawl {
+  const availablePubs = [...allPubs];
   const selectedPubs: Pub[] = [];
-  let currentLat = lat;
-  let currentLng = lng;
+  let currentLat = startLat;
+  let currentLng = startLng;
 
   for (let i = 0; i < numPubs; i++) {
-    if (allPubs.length === 0) break;
+    if (availablePubs.length === 0) break;
 
-    // Find nearest pub
-    let nearestIdx = -1;
-    let minDist = Infinity;
-
-    for (let j = 0; j < allPubs.length; j++) {
-      const d = calculateDistance(currentLat, currentLng, allPubs[j].coordinates!.lat, allPubs[j].coordinates!.lng);
-      if (d < minDist) {
-        minDist = d;
-        nearestIdx = j;
+    let nextIdx = -1;
+    if (randomize) {
+      // Pick a random pub from the 5 nearest ones to add variety
+      const distances = availablePubs.map((p, idx) => ({
+        idx,
+        dist: calculateDistance(currentLat, currentLng, p.coordinates!.lat, p.coordinates!.lng)
+      })).sort((a, b) => a.dist - b.dist);
+      
+      const poolSize = Math.min(5, distances.length);
+      const randomChoice = Math.floor(Math.random() * poolSize);
+      nextIdx = distances[randomChoice].idx;
+    } else {
+      // Standard nearest neighbor
+      let minDist = Infinity;
+      for (let j = 0; j < availablePubs.length; j++) {
+        const d = calculateDistance(currentLat, currentLng, availablePubs[j].coordinates!.lat, availablePubs[j].coordinates!.lng);
+        if (d < minDist) {
+          minDist = d;
+          nextIdx = j;
+        }
       }
     }
 
-    if (nearestIdx !== -1) {
-      const pub = allPubs.splice(nearestIdx, 1)[0];
-      pub.distanceFromPrevious = minDist;
+    if (nextIdx !== -1) {
+      const pub = { ...availablePubs.splice(nextIdx, 1)[0] };
+      pub.distanceFromPrevious = calculateDistance(currentLat, currentLng, pub.coordinates!.lat, pub.coordinates!.lng);
       selectedPubs.push(pub);
       currentLat = pub.coordinates!.lat;
       currentLng = pub.coordinates!.lng;
@@ -362,55 +435,109 @@ export async function generatePubCrawl(
   const totalDistance = selectedPubs.reduce((sum, p) => sum + p.distanceFromPrevious, 0);
 
   return {
-    name: `${location} Pub Crawl`,
+    name: `${locationName} Route ${Math.floor(Math.random() * 1000)}`,
     pubs: selectedPubs,
     totalDistance
   };
 }
 
-export async function fetchTaxis(lat: number, lng: number): Promise<Taxi[]> {
-  const query = `
-    [out:json][timeout:30];
-    (
-      node["amenity"="taxi"](around:2000,${lat},${lng});
-      way["amenity"="taxi"](around:2000,${lat},${lng});
-      node["office"="taxi"](around:2000,${lat},${lng});
-      way["office"="taxi"](around:2000,${lat},${lng});
-    );
-    out center;
-  `;
+export async function generatePubCrawl(
+  location: string,
+  numPubs: number,
+  maxDistanceBetween: number
+): Promise<PubCrawl> {
+  const { pubs, lat, lng } = await fetchAllAvailablePubs(location);
+  const crawl = createCrawlFromPubs(pubs, lat, lng, numPubs, location);
 
+  // Fetch accurate menus for selected pubs in parallel
+  await Promise.all(
+    crawl.pubs.map(async (pub) => {
+      const accurateDrinks = await fetchAccurateMenu(pub.name, pub.address);
+      if (accurateDrinks && accurateDrinks.length > 0) {
+        pub.drinks = accurateDrinks;
+      }
+    })
+  );
+
+  return crawl;
+}
+
+export async function fetchTaxis(lat: number, lng: number, searchLocation: string): Promise<Taxi[]> {
   try {
-    const response = await fetch("https://overpass-api.de/api/interpreter", {
-      method: "POST",
-      body: query
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: `Find 3-4 real, active local taxi companies or private hire services in or near "${searchLocation}". 
+      The specific coordinates are ${lat}, ${lng}. 
+      Include their name, phone number, and address if available. 
+      Also provide a realistic estimated flat rate or fare range for a short trip (2-5 miles) in this specific area.
+      Return the data as a list of taxi services.`,
+      config: {
+        tools: [{ googleSearch: {} }],
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              name: { type: Type.STRING },
+              phone: { type: Type.STRING },
+              address: { type: Type.STRING },
+              estimatedRate: { type: Type.STRING }
+            },
+            required: ["name", "phone", "estimatedRate"]
+          }
+        }
+      }
     });
-    
-    if (!response.ok) throw new Error("Taxi fetch failed");
-    
-    const data = await response.json();
-    const taxis: Taxi[] = (data.elements || []).map((el: any) => ({
-      id: el.id.toString(),
-      name: el.tags.name || "Local Taxi Service",
-      phone: el.tags.phone || el.tags["contact:phone"] || "01234 567890",
-      address: el.tags["addr:street"] ? `${el.tags["addr:housenumber"] || ""} ${el.tags["addr:street"]}` : undefined,
-      estimatedRate: "£5-£15 (Typical local fare)"
-    }));
 
-    // If no taxis found, return some generic ones for the area
-    if (taxis.length === 0) {
-      return [
-        { id: "gen1", name: "City Cabs", phone: "01234 567890", estimatedRate: "£10 Flat Rate (Crawl Special)" },
-        { id: "gen2", name: "Local Link Taxis", phone: "01234 987654", estimatedRate: "Metered (Est. £8-£12)" }
-      ];
+    const text = response.text;
+    if (!text) throw new Error("No taxi data from Gemini");
+    const taxis = JSON.parse(text);
+    return taxis.map((t: any, i: number) => ({
+      ...t,
+      id: `taxi-${i}-${Date.now()}`
+    }));
+  } catch (error) {
+    console.error("Gemini taxi fetch failed, falling back to Overpass:", error);
+    
+    // Fallback to Overpass if Gemini fails
+    const query = `
+      [out:json][timeout:30];
+      (
+        node["amenity"="taxi"](around:5000,${lat},${lng});
+        way["amenity"="taxi"](around:5000,${lat},${lng});
+        node["office"="taxi"](around:5000,${lat},${lng});
+        way["office"="taxi"](around:5000,${lat},${lng});
+      );
+      out center;
+    `;
+
+    try {
+      const response = await fetch("https://overpass-api.de/api/interpreter", {
+        method: "POST",
+        body: query
+      });
+      
+      if (!response.ok) throw new Error("Overpass fallback failed");
+      
+      const data = await response.json();
+      const taxis: Taxi[] = (data.elements || []).map((el: any) => ({
+        id: el.id.toString(),
+        name: el.tags.name || "Local Taxi Service",
+        phone: el.tags.phone || el.tags["contact:phone"] || "Contact via App",
+        address: el.tags["addr:street"] ? `${el.tags["addr:housenumber"] || ""} ${el.tags["addr:street"]}` : undefined,
+        estimatedRate: "Metered (Typical local fare)"
+      }));
+
+      if (taxis.length > 0) return taxis;
+    } catch (fallbackError) {
+      console.error("Overpass fallback also failed:", fallbackError);
     }
 
-    return taxis;
-  } catch (error) {
-    console.error("Taxi fetch failed:", error);
+    // Final hardcoded fallback with generic but helpful info
     return [
-      { id: "gen1", name: "City Cabs", phone: "01234 567890", estimatedRate: "£10 Flat Rate (Crawl Special)" },
-      { id: "gen2", name: "Local Link Taxis", phone: "01234 987654", estimatedRate: "Metered (Est. £8-£12)" }
+      { id: "gen1", name: "Local Taxi Search", phone: "Search Google", estimatedRate: "Check local rates" },
+      { id: "gen2", name: "Uber / Bolt / FreeNow", phone: "Use Mobile App", estimatedRate: "App-based pricing" }
     ];
   }
 }
