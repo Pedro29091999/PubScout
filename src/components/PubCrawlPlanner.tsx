@@ -15,10 +15,12 @@ import {
   Dices,
   Globe,
   Phone,
-  Clock
+  Clock,
+  Car,
+  CreditCard
 } from "lucide-react";
-import { generatePubCrawl } from "../services/pubService";
-import { PubCrawl, Pub } from "../types";
+import { generatePubCrawl, fetchTaxis } from "../services/pubService";
+import { PubCrawl, Pub, Taxi } from "../types";
 import { cn } from "../lib/utils";
 import DrinkGenerator from "./DrinkGenerator";
 import MapComponent from "./MapComponent";
@@ -29,6 +31,7 @@ export default function PubCrawlPlanner() {
   const [maxDist, setMaxDist] = useState(500);
   const [loading, setLoading] = useState(false);
   const [crawl, setCrawl] = useState<PubCrawl | null>(null);
+  const [taxis, setTaxis] = useState<Taxi[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
@@ -59,6 +62,15 @@ export default function PubCrawlPlanner() {
     try {
       const result = await generatePubCrawl(location, numPubs, maxDist);
       setCrawl(result);
+      
+      // Fetch taxis based on the last pub's location or the search location
+      const lastPub = result.pubs[result.pubs.length - 1];
+      const taxiResults = await fetchTaxis(
+        lastPub?.coordinates?.lat || 0, 
+        lastPub?.coordinates?.lng || 0
+      );
+      setTaxis(taxiResults);
+      
       setCurrentIndex(0);
     } catch (err: any) {
       setError(err.message || "Something went wrong");
@@ -68,7 +80,7 @@ export default function PubCrawlPlanner() {
   };
 
   const nextPub = () => {
-    if (crawl && currentIndex < crawl.pubs.length - 1) {
+    if (crawl && currentIndex < crawl.pubs.length) {
       setCurrentIndex(currentIndex + 1);
     }
   };
@@ -223,6 +235,31 @@ export default function PubCrawlPlanner() {
                       </div>
                     </button>
                   ))}
+
+                  {/* Taxi Stop */}
+                  <button
+                    onClick={() => setCurrentIndex(crawl.pubs.length)}
+                    className={cn(
+                      "w-full flex items-start gap-4 p-3 rounded-2xl transition-all relative z-10",
+                      currentIndex === crawl.pubs.length ? "bg-orange-500 text-black" : "hover:bg-white/5 text-white/60"
+                    )}
+                  >
+                    <div className={cn(
+                      "w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-xs font-bold border",
+                      currentIndex === crawl.pubs.length ? "bg-black text-orange-500 border-black" : "bg-neutral-900 border-white/10"
+                    )}>
+                      <Car className="w-4 h-4" />
+                    </div>
+                    <div className="text-left">
+                      <p className="font-bold leading-tight">Get Home Safe</p>
+                      <p className={cn(
+                        "text-xs mt-1",
+                        currentIndex === crawl.pubs.length ? "text-black/70" : "text-white/40"
+                      )}>
+                        Local Taxi Services
+                      </p>
+                    </div>
+                  </button>
                 </div>
               </div>
             </div>
@@ -250,8 +287,8 @@ export default function PubCrawlPlanner() {
                   exit={{ opacity: 0, x: -20 }}
                   className="space-y-8"
                 >
-                  {/* Current Pub Card */}
-                  <div className="bg-white/5 rounded-[2.5rem] border border-white/10 overflow-hidden">
+                  {currentIndex < crawl.pubs.length ? (
+                    <div className="bg-white/5 rounded-[2.5rem] border border-white/10 overflow-hidden">
                     <div className="p-8 md:p-12 space-y-8">
                       <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
                         <div className="space-y-2">
@@ -299,22 +336,21 @@ export default function PubCrawlPlanner() {
                             </div>
                           </div>
                         </div>
-                        <div className="flex gap-2">
-                          <button 
-                            onClick={prevPub}
-                            disabled={currentIndex === 0}
-                            className="p-4 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 disabled:opacity-30 transition-all"
-                          >
-                            <ChevronLeft className="w-6 h-6" />
-                          </button>
-                          <button 
-                            onClick={nextPub}
-                            disabled={currentIndex === crawl.pubs.length - 1}
-                            className="p-4 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 disabled:opacity-30 transition-all"
-                          >
-                            <ChevronRight className="w-6 h-6" />
-                          </button>
-                        </div>
+                          <div className="flex gap-2">
+                            <button 
+                              onClick={prevPub}
+                              disabled={currentIndex === 0}
+                              className="p-4 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 disabled:opacity-30 transition-all"
+                            >
+                              <ChevronLeft className="w-6 h-6" />
+                            </button>
+                            <button 
+                              onClick={nextPub}
+                              className="p-4 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all"
+                            >
+                              <ChevronRight className="w-6 h-6" />
+                            </button>
+                          </div>
                       </div>
 
                       <div className="grid md:grid-cols-2 gap-8">
@@ -406,8 +442,80 @@ export default function PubCrawlPlanner() {
                           )}
                         </div>
                       </div>
+                      </div>
                     </div>
-                  </div>
+                  ) : (
+                    /* Taxi Page */
+                    <div className="bg-white/5 rounded-[2.5rem] border border-white/10 overflow-hidden">
+                      <div className="p-8 md:p-12 space-y-8">
+                        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2 text-orange-500 text-xs font-bold uppercase tracking-widest">
+                              <Car className="w-4 h-4" />
+                              End of Route
+                            </div>
+                            <h1 className="text-4xl md:text-5xl font-bold tracking-tight">Get Home Safe</h1>
+                            <p className="text-white/60 max-w-xl">You've reached the end of the crawl! Here are some local taxi services to help you get home safely.</p>
+                          </div>
+                          <div className="flex gap-2">
+                            <button 
+                              onClick={prevPub}
+                              className="p-4 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all"
+                            >
+                              <ChevronLeft className="w-6 h-6" />
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="grid md:grid-cols-2 gap-6">
+                          {taxis.map((taxi) => (
+                            <div key={taxi.id} className="p-6 rounded-3xl bg-white/5 border border-white/10 hover:border-orange-500/30 transition-all space-y-4 group">
+                              <div className="flex items-start justify-between">
+                                <div className="space-y-1">
+                                  <h3 className="font-bold text-xl group-hover:text-orange-500 transition-colors">{taxi.name}</h3>
+                                  {taxi.address && <p className="text-sm text-white/40">{taxi.address}</p>}
+                                </div>
+                                <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center">
+                                  <Car className="w-5 h-5 text-orange-500" />
+                                </div>
+                              </div>
+                              
+                              <div className="flex flex-col gap-3">
+                                <div className="flex items-center justify-between p-3 rounded-xl bg-white/5">
+                                  <div className="flex items-center gap-2 text-sm text-white/60">
+                                    <Phone className="w-4 h-4" />
+                                    <span>{taxi.phone}</span>
+                                  </div>
+                                  <a 
+                                    href={`tel:${taxi.phone?.replace(/\s/g, '')}`}
+                                    className="text-xs font-bold text-orange-500 hover:underline"
+                                  >
+                                    Call Now
+                                  </a>
+                                </div>
+                                
+                                <div className="flex items-center justify-between p-3 rounded-xl bg-white/5">
+                                  <div className="flex items-center gap-2 text-sm text-white/60">
+                                    <CreditCard className="w-4 h-4" />
+                                    <span>Estimated Rate</span>
+                                  </div>
+                                  <span className="text-xs font-mono text-orange-500">{taxi.estimatedRate}</span>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="p-8 rounded-3xl bg-orange-500/10 border border-orange-500/20 text-center space-y-4">
+                          <h3 className="font-bold text-xl text-orange-500">Responsible Crawling</h3>
+                          <p className="text-sm text-white/60 max-w-lg mx-auto">
+                            Always travel with friends, keep your phone charged, and never drink and drive. 
+                            Have a great night and get home safely!
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </motion.div>
               </AnimatePresence>
             </div>

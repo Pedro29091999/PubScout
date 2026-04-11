@@ -25,3 +25,11 @@ export interface PubCrawl {
   pubs: Pub[];
   totalDistance: number;
 }
+
+export interface Taxi {
+  id: string;
+  name: string;
+  phone?: string;
+  address?: string;
+  estimatedRate?: string;
+}
