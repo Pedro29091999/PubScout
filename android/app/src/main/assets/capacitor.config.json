@@ -1,5 +1,10 @@
 {
 	"appId": "com.pubscout.app",
 	"appName": "PubScout",
-	"webDir": "dist"
+	"webDir": "dist",
+	"plugins": {
+		"AdMob": {
+			"appId": "ca-app-pub-8748344406083155~2715385179"
+		}
+	}
 }
