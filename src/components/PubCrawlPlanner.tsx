@@ -72,7 +72,7 @@ export default function PubCrawlPlanner() {
     setLoading(true);
     setError(null);
     try {
-      const { pubs, lat, lng } = await fetchAllAvailablePubs(location);
+      const { pubs, lat, lng } = await fetchAllAvailablePubs(location, maxDist);
       setAllAvailablePubs(pubs);
       setBaseCoords({ lat, lng });
 
@@ -107,30 +107,67 @@ export default function PubCrawlPlanner() {
     setCrawl(newOptions[0]);
   };
 
-  const selectCrawl = async (selected: PubCrawl) => {
-    setLoading(true);
-    try {
-      // Fetch accurate menus only when a crawl is finalized/selected
-      await Promise.all(
-        selected.pubs.map(async (pub) => {
-          if (pub.drinks.length === 0 || pub.drinks[0].name === "Guinness") { // Check if it's generic
-            const accurateDrinks = await fetchAccurateMenu(pub.name, pub.address);
-            if (accurateDrinks && accurateDrinks.length > 0) {
-              pub.drinks = accurateDrinks;
-            }
+  const [fetchingMenus, setFetchingMenus] = useState<Set<string>>(new Set());
+  const fetchingRef = React.useRef<Set<string>>(new Set());
+
+  const selectCrawl = (selected: PubCrawl) => {
+    setCrawl(selected);
+    setShowOverview(false);
+    setCurrentIndex(0);
+  };
+
+  // Lazy fetch menu for current and next pub
+  useEffect(() => {
+    const fetchMenus = async () => {
+      if (crawl && !showOverview) {
+        // 1. Fetch current pub menu
+        if (currentIndex < crawl.pubs.length) {
+          const pub = crawl.pubs[currentIndex];
+          if (pub.drinks.length === 0 && !fetchingRef.current.has(pub.id)) {
+            performMenuFetch(pub);
           }
-        })
-      );
-      setCrawl(selected);
-      setShowOverview(false);
-      setCurrentIndex(0);
+        }
+
+        // 2. Pre-fetch next pub menu for speed
+        if (currentIndex + 1 < crawl.pubs.length) {
+          const nextPub = crawl.pubs[currentIndex + 1];
+          if (nextPub.drinks.length === 0 && !fetchingRef.current.has(nextPub.id)) {
+            performMenuFetch(nextPub);
+          }
+        }
+      }
+    };
+    fetchMenus();
+  }, [currentIndex, crawl?.name, showOverview]);
+
+  const performMenuFetch = async (pub: Pub) => {
+    if (fetchingRef.current.has(pub.id)) return;
+    
+    fetchingRef.current.add(pub.id);
+    setFetchingMenus(prev => new Set(prev).add(pub.id));
+    
+    try {
+      const accurateDrinks = await fetchAccurateMenu(pub.name, pub.address);
+      if (accurateDrinks && accurateDrinks.length > 0) {
+        setCrawl(prevCrawl => {
+          if (!prevCrawl) return null;
+          const newPubs = [...prevCrawl.pubs];
+          const pIdx = newPubs.findIndex(p => p.id === pub.id);
+          if (pIdx !== -1) {
+            newPubs[pIdx] = { ...newPubs[pIdx], drinks: accurateDrinks };
+          }
+          return { ...prevCrawl, pubs: newPubs };
+        });
+      }
     } catch (err) {
-      console.error("Failed to fetch menus", err);
-      setCrawl(selected);
-      setShowOverview(false);
-      setCurrentIndex(0);
+      console.error(`Menu fetch failed for ${pub.name}`, err);
     } finally {
-      setLoading(false);
+      fetchingRef.current.delete(pub.id);
+      setFetchingMenus(prev => {
+        const next = new Set(prev);
+        next.delete(pub.id);
+        return next;
+      });
     }
   };
 
@@ -298,7 +335,16 @@ export default function PubCrawlPlanner() {
               </button>
               
               {error && (
-                <p className="text-red-400 text-sm text-center font-medium">{error}</p>
+                <div className="space-y-4">
+                  <p className="text-red-400 text-sm text-center font-medium">{error}</p>
+                  <button 
+                    type="button"
+                    onClick={() => handleGenerate()}
+                    className="w-full py-2 text-xs font-bold uppercase tracking-widest text-white/40 hover:text-white transition-colors"
+                  >
+                    Try Again
+                  </button>
+                </div>
               )}
             </form>
           </motion.div>
@@ -541,7 +587,12 @@ export default function PubCrawlPlanner() {
                             </p>
                           </div>
                           <div className="space-y-2">
-                            {currentPub?.drinks && currentPub.drinks.length > 0 ? (
+                            {fetchingMenus.has(currentPub?.id || "") ? (
+                              <div className="p-10 rounded-[2rem] border border-dashed border-white/10 flex flex-col items-center justify-center text-center space-y-4 bg-white/[0.02]">
+                                <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
+                                <p className="text-white/40 text-sm">Fetching accurate menu...</p>
+                              </div>
+                            ) : currentPub?.drinks && currentPub.drinks.length > 0 ? (
                               currentPub.drinks.map((drink, i) => (
                                 <div key={i} className="flex items-center justify-between p-4 rounded-2xl bg-white/5 border border-white/5 transition-all">
                                   <div>
@@ -554,22 +605,22 @@ export default function PubCrawlPlanner() {
                                 </div>
                               ))
                             ) : (
-                              <div className="p-8 rounded-3xl border border-dashed border-white/10 flex flex-col items-center justify-center text-center space-y-4 bg-white/[0.02]">
-                                <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center">
-                                  <Search className="w-6 h-6 text-white/20" />
+                              <div className="p-10 rounded-[2rem] border border-dashed border-white/10 flex flex-col items-center justify-center text-center space-y-6 bg-white/[0.02]">
+                                <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center">
+                                  <GlassWater className="w-8 h-8 text-white/20" />
                                 </div>
-                                <div className="space-y-1">
-                                  <p className="text-white/60 text-sm font-medium">No local menu data available</p>
-                                  <p className="text-white/30 text-xs">Try searching Google for the most accurate results</p>
+                                <div className="space-y-2">
+                                  <p className="text-white font-bold text-lg">No Menu Data Found</p>
+                                  <p className="text-white/40 text-sm max-w-[200px] mx-auto">We couldn't find a verified menu for this venue online.</p>
                                 </div>
                                 <a 
                                   href={`https://www.google.com/search?q=${encodeURIComponent(`${currentPub?.name} ${currentPub?.address} menu`)}`}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="px-6 py-2.5 rounded-xl bg-white/5 border border-white/10 text-xs font-bold text-orange-500 hover:bg-orange-500/10 hover:border-orange-500/30 transition-all flex items-center gap-2"
+                                  className="px-8 py-3 rounded-2xl bg-orange-500 text-black font-bold text-sm hover:bg-orange-400 transition-all flex items-center gap-2"
                                 >
-                                  <Globe className="w-4 h-4" />
-                                  Search on Google
+                                  <Search className="w-4 h-4" />
+                                  Search Google
                                 </a>
                               </div>
                             )}

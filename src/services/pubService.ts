@@ -5,11 +5,11 @@ let aiInstance: GoogleGenAI | null = null;
 
 function getAI() {
   if (!aiInstance) {
-    const apiKey = import.meta.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
+    const apiKey = process.env.GEMINI_API_KEY;
     console.log("Gemini: Initializing with API key present:", !!apiKey);
     if (!apiKey) {
-      console.error("Gemini: GEMINI_API_KEY is missing from environment.");
-      throw new Error("GEMINI_API_KEY is not defined. Please add it to your environment variables.");
+      console.error("Gemini: GEMINI_API_KEY is missing from environment. Please add it to AI Studio Settings -> Secrets.");
+      throw new Error("GEMINI_API_KEY is not defined.");
     }
     aiInstance = new GoogleGenAI({ apiKey });
   }
@@ -17,7 +17,7 @@ function getAI() {
 }
 
 // Caching helpers
-const CACHE_PREFIX = "pubscout_v1_";
+const CACHE_PREFIX = "pubscout_v2_";
 const CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
 
 function getFromCache<T>(key: string): T | null {
@@ -85,18 +85,8 @@ async function geocode(location: string): Promise<{ lat: number; lng: number } |
   return null;
 }
 
-// Overpass API for fetching pubs
-async function fetchPubs(lat: number, lng: number, radius: number): Promise<any[]> {
-  const query = `
-    [out:json][timeout:60];
-    (
-      node["amenity"="pub"](around:${radius},${lat},${lng});
-      way["amenity"="pub"](around:${radius},${lat},${lng});
-      relation["amenity"="pub"](around:${radius},${lat},${lng});
-    );
-    out center;
-  `;
-  
+// Overpass API helper
+async function runOverpassQuery(query: string): Promise<any[]> {
   const endpoints = [
     "https://overpass-api.de/api/interpreter",
     "https://lz4.overpass-api.de/api/interpreter",
@@ -117,103 +107,35 @@ async function fetchPubs(lat: number, lng: number, radius: number): Promise<any[
       if (!response.ok) {
         const text = await response.text();
         console.warn(`Overpass API error from ${endpoint} (${response.status}):`, text.substring(0, 200));
-        continue; // Try next endpoint
+        continue;
       }
 
       const contentType = response.headers.get("content-type");
       if (contentType && contentType.includes("application/json")) {
         const data = await response.json();
         return data.elements || [];
-      } else {
-        const text = await response.text();
-        console.warn(`Overpass API from ${endpoint} returned non-JSON response:`, text.substring(0, 200));
-        continue; // Try next endpoint
       }
     } catch (error) {
       console.warn(`Overpass API request to ${endpoint} failed:`, error);
-      continue; // Try next endpoint
     }
   }
-
-  console.error("All Overpass API endpoints failed.");
   return [];
 }
 
-// Real-world menu templates for popular pub chains and styles
-const REAL_MENUS: Record<string, Drink[]> = {
-  "brewdog": [
-    { name: "Punk IPA", price: "£6.20", category: "Beer" },
-    { name: "Hazy Jane", price: "£6.50", category: "Beer" },
-    { name: "Elvis Juice", price: "£6.40", category: "Beer" },
-    { name: "Lost Lager", price: "£5.80", category: "Beer" },
-    { name: "Dead Pony Club", price: "£5.90", category: "Beer" },
-    { name: "Alcohol Free Punk", price: "£4.50", category: "Soft Drink" }
-  ],
-  "wetherspoon": [
-    { name: "Abbot Ale", price: "£3.45", category: "Beer" },
-    { name: "Greene King IPA", price: "£2.95", category: "Beer" },
-    { name: "Foster's", price: "£3.20", category: "Beer" },
-    { name: "Strongbow", price: "£3.50", category: "Beer" },
-    { name: "Jack Daniel's & Coke", price: "£4.80", category: "Spirit" },
-    { name: "Pepsi Max", price: "£2.10", category: "Soft Drink" }
-  ],
-  "irish": [
-    { name: "Guinness", price: "£6.10", category: "Beer" },
-    { name: "Jameson Ginger & Lime", price: "£8.50", category: "Spirit" },
-    { name: "Magners Cider", price: "£5.80", category: "Beer" },
-    { name: "Baby Stout Shot", price: "£4.50", category: "Spirit" },
-    { name: "Irish Coffee", price: "£7.50", category: "Cocktail" },
-    { name: "Club Orange", price: "£3.20", category: "Soft Drink" }
-  ],
-  "craft": [
-    { name: "Neck Oil Session IPA", price: "£6.80", category: "Beer" },
-    { name: "Gamma Ray APA", price: "£7.00", category: "Beer" },
-    { name: "Cloudwater Pale", price: "£7.20", category: "Beer" },
-    { name: "Sour Ale", price: "£7.50", category: "Beer" },
-    { name: "Negroni", price: "£11.00", category: "Cocktail" },
-    { name: "Artisan Tonic", price: "£3.50", category: "Soft Drink" }
-  ],
-  "traditional": [
-    { name: "London Pride", price: "£5.40", category: "Beer" },
-    { name: "Doom Bar", price: "£5.20", category: "Beer" },
-    { name: "Peroni", price: "£6.20", category: "Beer" },
-    { name: "Gordon's Gin & Tonic", price: "£7.50", category: "Spirit" },
-    { name: "Pimms & Lemonade", price: "£8.00", category: "Cocktail" },
-    { name: "J2O Orange & Passionfruit", price: "£3.80", category: "Soft Drink" }
-  ],
-  "cocktail": [
-    { name: "Espresso Martini", price: "£12.50", category: "Cocktail" },
-    { name: "Pornstar Martini", price: "£13.00", category: "Cocktail" },
-    { name: "Old Fashioned", price: "£12.00", category: "Cocktail" },
-    { name: "Margarita", price: "£11.50", category: "Cocktail" },
-    { name: "Aperol Spritz", price: "£10.50", category: "Cocktail" },
-    { name: "Virgin Mojito", price: "£7.50", category: "Soft Drink" }
-  ],
-  "sam_smiths": [
-    { name: "Taddy Lager", price: "£4.80", category: "Beer" },
-    { name: "Alpine Lager", price: "£4.50", category: "Beer" },
-    { name: "Old Brewery Bitter", price: "£4.20", category: "Beer" },
-    { name: "Pure Brewed Lager", price: "£5.20", category: "Beer" },
-    { name: "Sovereign Bitter", price: "£4.40", category: "Beer" },
-    { name: "Celebrity Ginger Beer", price: "£3.50", category: "Soft Drink" }
-  ],
-  "greene_king": [
-    { name: "Greene King IPA", price: "£4.80", category: "Beer" },
-    { name: "Abbot Ale", price: "£5.20", category: "Beer" },
-    { name: "Old Speckled Hen", price: "£5.40", category: "Beer" },
-    { name: "Ice Breaker Pale Ale", price: "£5.80", category: "Beer" },
-    { name: "Yardbird Lager", price: "£5.50", category: "Beer" },
-    { name: "Belhaven Best", price: "£4.90", category: "Beer" }
-  ],
-  "fullers": [
-    { name: "London Pride", price: "£5.80", category: "Beer" },
-    { name: "ESB", price: "£6.20", category: "Beer" },
-    { name: "Seafarers", price: "£5.90", category: "Beer" },
-    { name: "Frontier Lager", price: "£6.40", category: "Beer" },
-    { name: "Honey Dew", price: "£6.10", category: "Beer" },
-    { name: "Cornish Orchards Cider", price: "£6.00", category: "Beer" }
-  ]
-};
+// Overpass API for fetching pubs
+async function fetchPubs(lat: number, lng: number, radius: number): Promise<any[]> {
+  const query = `
+    [out:json][timeout:60];
+    (
+      node["amenity"~"pub|bar"](around:${radius},${lat},${lng});
+      way["amenity"~"pub|bar"](around:${radius},${lat},${lng});
+      relation["amenity"~"pub|bar"](around:${radius},${lat},${lng});
+    );
+    out center;
+  `;
+  
+  return runOverpassQuery(query);
+}
 
 function generateDescription(tags: any): string {
   if (tags.description) return tags.description;
@@ -256,31 +178,7 @@ function generateDescription(tags: any): string {
 }
 
 function getRealisticDrinks(pubName: string, tags: any): Drink[] {
-  const name = pubName.toLowerCase();
-  const operator = tags.operator?.toLowerCase() || "";
-  
-  // Match specific chains (High confidence)
-  if (name.includes("brewdog") || operator.includes("brewdog")) return REAL_MENUS.brewdog;
-  if (name.includes("wetherspoon") || name.includes("moon under water") || operator.includes("wetherspoon")) return REAL_MENUS.wetherspoon;
-  if (name.includes("sam smith") || operator.includes("samuel smith")) return REAL_MENUS.sam_smiths;
-  if (name.includes("greene king") || operator.includes("greene king")) return REAL_MENUS.greene_king;
-  if (name.includes("fuller") || operator.includes("fuller")) return REAL_MENUS.fullers;
-  
-  // Match by style/tags (Medium confidence)
-  if (name.includes("irish") || name.includes("o'") || name.includes("shamrock") || name.includes("dublin") || tags.cuisine === "irish") return REAL_MENUS.irish;
-  if (name.includes("craft") || name.includes("tap") || name.includes("brewery") || name.includes("hop") || name.includes("ale house") || tags.brewery) return REAL_MENUS.craft;
-  if (name.includes("cocktail") || name.includes("lounge") || tags.cuisine === "cocktail" || tags.bar === "cocktail") return REAL_MENUS.cocktail;
-  
-  // Only return "traditional" if we are reasonably sure it's a standard pub
-  // Otherwise return empty to avoid "random" feeling
-  if (tags.amenity === "pub") {
-    // If it has a very generic name, it might be better to show no menu than a fake one
-    // But for now, traditional is a safe fallback for "amenity=pub"
-    return REAL_MENUS.traditional;
-  }
-  
-  if (tags.amenity === "bar") return REAL_MENUS.craft;
-  
+  // We return empty to force an accurate fetch or show the "No Menu" prompt
   return [];
 }
 
@@ -288,12 +186,21 @@ export async function fetchAccurateMenu(pubName: string, address: string): Promi
   console.log(`Gemini: Fetching menu for ${pubName}...`);
   try {
     const ai = getAI();
+    
+    // Check if it's a Wetherspoons pub for targeted search
+    const isWetherspoons = pubName.toLowerCase().includes("wetherspoon") || 
+                          pubName.toLowerCase().includes("j d wetherspoon") ||
+                          // Common Wetherspoons names often don't include the brand, 
+                          // but the prompt can be adjusted to look for their specific menu structure.
+                          true; 
+
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: `Find the current drink menu and prices for "${pubName}" at "${address}". 
-      Focus on popular drinks like beers, cocktails, and spirits. 
-      If exact prices are not found, provide realistic estimates based on the venue's style and location.
-      Return the data as a list of drinks with name, price, and category.`,
+      ${isWetherspoons ? 'This may be a Wetherspoons venue; check their official app/website data if possible.' : ''}
+      Focus on real beers, cocktails, and spirits. 
+      Return a JSON array of objects with "name", "price", and "category" (Beer, Wine, Spirit, Cocktail, or Soft Drink).
+      If no specific menu is found, return [].`,
       config: {
         tools: [{ googleSearch: {} }],
         responseMimeType: "application/json",
@@ -304,7 +211,10 @@ export async function fetchAccurateMenu(pubName: string, address: string): Promi
             properties: {
               name: { type: Type.STRING },
               price: { type: Type.STRING },
-              category: { type: Type.STRING }
+              category: { 
+                type: Type.STRING,
+                enum: ["Beer", "Wine", "Spirit", "Cocktail", "Soft Drink"]
+              }
             },
             required: ["name", "price", "category"]
           }
@@ -313,10 +223,30 @@ export async function fetchAccurateMenu(pubName: string, address: string): Promi
     });
 
     const text = response.text;
-    if (!text) return [];
-    const drinks = JSON.parse(text);
-    return drinks;
-  } catch (error) {
+    if (!text) {
+      console.warn(`Gemini: Empty response for ${pubName}`);
+      return [];
+    }
+    
+    try {
+      const drinks = JSON.parse(text);
+      return Array.isArray(drinks) ? drinks : [];
+    } catch (parseError) {
+      console.error(`Gemini: Failed to parse menu JSON for ${pubName}:`, text);
+      return [];
+    }
+  } catch (error: any) {
+    const errorMsg = error?.message || "";
+    const errorStr = JSON.stringify(error);
+    
+    if (errorMsg.includes("leaked") || errorStr.includes("leaked")) {
+      console.error("CRITICAL: Your Gemini API key has been flagged as leaked. Please update it in AI Studio Settings -> Secrets.");
+    } else if (errorMsg.includes("expired") || errorMsg.includes("API_KEY_INVALID") || errorStr.includes("expired") || errorStr.includes("API_KEY_INVALID")) {
+      console.error("CRITICAL: Your Gemini API key has expired or is invalid. Please provide a fresh key in AI Studio Settings -> Secrets.");
+    } else if (errorMsg.includes("disturbed") || errorMsg.includes("locked")) {
+      console.error("Gemini: Response body disturbed error. This can happen with network interruptions. Retrying might help.");
+    }
+    
     console.error(`Failed to fetch accurate menu for ${pubName}:`, error);
     return [];
   }
@@ -337,8 +267,8 @@ function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
   return Math.round(R * c);
 }
 
-export async function fetchAllAvailablePubs(location: string): Promise<{ pubs: Pub[], lat: number, lng: number }> {
-  const cacheKey = `pubs_${location.toLowerCase().trim()}`;
+export async function fetchAllAvailablePubs(location: string, searchRadius: number = 1500): Promise<{ pubs: Pub[], lat: number, lng: number }> {
+  const cacheKey = `pubs_${location.toLowerCase().trim()}_${searchRadius}`;
   const cached = getFromCache<{ pubs: Pub[], lat: number, lng: number }>(cacheKey);
   if (cached) return cached;
 
@@ -351,30 +281,47 @@ export async function fetchAllAvailablePubs(location: string): Promise<{ pubs: P
     lng = parseFloat(coordMatch[2]);
   } else {
     const coords = await geocode(location);
-    if (!coords) throw new Error("Could not find that location.");
+    if (!coords) throw new Error("Could not find that location. Please try a more specific city or area name.");
     lat = coords.lat;
     lng = coords.lng;
   }
 
-  // Fetch pubs in a moderate radius initially
-  let elements = await fetchPubs(lat, lng, 1500);
+  // Fetch pubs in the requested radius, with fallbacks if none found
+  console.log(`Searching for pubs/bars near ${lat}, ${lng} with radius ${searchRadius}m...`);
+  let elements = await fetchPubs(lat, lng, searchRadius);
   if (elements.length === 0) {
+    console.log(`No pubs in ${searchRadius}m, trying 3000m...`);
     elements = await fetchPubs(lat, lng, 3000);
   }
+  if (elements.length === 0) {
+    console.log(`No pubs in 3000m, trying 5000m...`);
+    elements = await fetchPubs(lat, lng, 5000);
+  }
+  
+  console.log(`Found ${elements.length} raw elements from Overpass.`);
   
   if (elements.length === 0) {
-    throw new Error("No pubs found in this area.");
+    throw new Error("No pubs or bars found in this area. Try searching for a more central location.");
   }
 
   const pubs: Pub[] = elements
     .filter(el => {
       if (!el.tags || !el.tags.name) return false;
+      
+      // Ensure we have coordinates
+      const lat = el.lat || el.center?.lat;
+      const lng = el.lon || el.center?.lon;
+      if (lat === undefined || lng === undefined) return false;
+
       const name = el.tags.name.toLowerCase();
       const excludeKeywords = ["club", "nightclub", "disco", "gentlemen's club", "strip club", "hotel", "restaurant", "training", "provider", "academy", "school", "college", "office", "consultancy", "business center", "medical", "hospital", "clinic", "church", "mosque", "temple"];
-      if (el.tags.amenity !== "pub") return false;
+      
+      if (!["pub", "bar"].includes(el.tags.amenity)) return false;
+      
       if (el.tags.disused === "yes" || el.tags.abandoned === "yes" || el.tags.closed === "yes" || el.tags.vacant === "yes" || el.tags.status === "closed" || el.tags.description?.toLowerCase().includes("permanently closed") || el.tags.note?.toLowerCase().includes("closed")) return false;
-      if (excludeKeywords.some(k => name.includes(k) && !name.includes("pub"))) {
-        if (!name.includes("pub")) return false;
+      
+      if (excludeKeywords.some(k => name.includes(k) && !name.includes("pub") && !name.includes("bar"))) {
+        if (!name.includes("pub") && !name.includes("bar")) return false;
       }
       return true;
     })
@@ -393,6 +340,10 @@ export async function fetchAllAvailablePubs(location: string): Promise<{ pubs: P
         lng: el.lon || el.center?.lon
       }
     }));
+
+  if (pubs.length === 0) {
+    throw new Error("No suitable pubs or bars found in this area.");
+  }
 
   const result = { pubs, lat, lng };
   saveToCache(cacheKey, result);
@@ -438,7 +389,7 @@ export function createCrawlFromPubs(
       }
     }
 
-    if (nextIdx !== -1) {
+    if (nextIdx !== -1 && availablePubs[nextIdx]) {
       const pub = { ...availablePubs.splice(nextIdx, 1)[0] };
       pub.distanceFromPrevious = calculateDistance(currentLat, currentLng, pub.coordinates!.lat, pub.coordinates!.lng);
       selectedPubs.push(pub);
@@ -509,12 +460,30 @@ export async function fetchTaxis(lat: number, lng: number, searchLocation: strin
 
     const text = response.text;
     if (!text) throw new Error("No taxi data from Gemini");
-    const taxis = JSON.parse(text);
+    
+    let taxis;
+    try {
+      taxis = JSON.parse(text);
+    } catch (parseError) {
+      console.error("Gemini: Failed to parse taxi JSON:", text);
+      throw new Error("Invalid JSON from Gemini");
+    }
+    
+    if (!Array.isArray(taxis)) return [];
+    
     return taxis.map((t: any, i: number) => ({
       ...t,
       id: `taxi-${i}-${Date.now()}`
     }));
-  } catch (error) {
+  } catch (error: any) {
+    const errorMsg = error?.message || "";
+    const errorStr = JSON.stringify(error);
+    
+    if (errorMsg.includes("leaked") || errorStr.includes("leaked")) {
+      console.error("CRITICAL: Your Gemini API key has been flagged as leaked. Please update it in AI Studio Settings -> Secrets.");
+    } else if (errorMsg.includes("expired") || errorMsg.includes("API_KEY_INVALID") || errorStr.includes("expired") || errorStr.includes("API_KEY_INVALID")) {
+      console.error("CRITICAL: Your Gemini API key has expired or is invalid. Please provide a fresh key in AI Studio Settings -> Secrets.");
+    }
     console.error("Gemini taxi fetch failed, falling back to Overpass:", error);
     
     // Fallback to Overpass if Gemini fails
@@ -530,15 +499,8 @@ export async function fetchTaxis(lat: number, lng: number, searchLocation: strin
     `;
 
     try {
-      const response = await fetch("https://overpass-api.de/api/interpreter", {
-        method: "POST",
-        body: query
-      });
-      
-      if (!response.ok) throw new Error("Overpass fallback failed");
-      
-      const data = await response.json();
-      const taxis: Taxi[] = (data.elements || []).map((el: any) => ({
+      const elements = await runOverpassQuery(query);
+      const taxis: Taxi[] = elements.map((el: any) => ({
         id: el.id.toString(),
         name: el.tags.name || "Local Taxi Service",
         phone: el.tags.phone || el.tags["contact:phone"] || "Contact via App",

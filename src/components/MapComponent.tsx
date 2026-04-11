@@ -25,7 +25,21 @@ function MapBounds({ pubs }: { pubs: Pub[] }) {
 }
 
 const MapComponent: React.FC<MapComponentProps> = ({ pubs, selectedPubIndex, onSelectPub }) => {
-  const validPubs = pubs.filter(p => p.coordinates);
+  const validPubs = pubs.filter(p => 
+    p.coordinates && 
+    typeof p.coordinates.lat === 'number' && 
+    typeof p.coordinates.lng === 'number' &&
+    !isNaN(p.coordinates.lat) &&
+    !isNaN(p.coordinates.lng)
+  );
+
+  useEffect(() => {
+    // Trigger resize to fix Leaflet rendering in dynamic containers
+    const timer = setTimeout(() => {
+      window.dispatchEvent(new Event('resize'));
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [validPubs.length]);
 
   if (validPubs.length === 0) return null;
 
