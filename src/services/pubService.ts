@@ -5,11 +5,28 @@ let aiInstance: GoogleGenAI | null = null;
 
 function getAI() {
   if (!aiInstance) {
-    // Use the Vite-injected environment variable
-    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+    // Try multiple ways to get the API key
+    let apiKey = "";
+    
+    try {
+      // 1. Try import.meta.env (Vite standard)
+      apiKey = (import.meta as any).env?.VITE_GEMINI_API_KEY || "";
+      
+      // 2. Try process.env (Node/CommonJS style)
+      if (!apiKey && typeof process !== 'undefined' && process.env) {
+        apiKey = process.env.GEMINI_API_KEY || "";
+      }
+      
+      // 3. Try global window (if we defined it there)
+      if (!apiKey && typeof window !== 'undefined') {
+        apiKey = (window as any).GEMINI_API_KEY || "";
+      }
+    } catch (e) {
+      console.warn("Gemini: Error accessing environment variables:", e);
+    }
     
     if (!apiKey) {
-      console.error("Gemini: API Key is missing from import.meta.env.VITE_GEMINI_API_KEY. Check AI Studio Secrets and rebuild.");
+      console.error("Gemini: API Key is missing. Please check AI Studio Secrets and rebuild.");
       throw new Error("GEMINI_API_KEY is not defined.");
     }
     
@@ -17,6 +34,20 @@ function getAI() {
     aiInstance = new GoogleGenAI({ apiKey });
   }
   return aiInstance;
+}
+
+export async function testAI(): Promise<string> {
+  try {
+    const ai = getAI();
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: "Say 'AI is working'",
+    });
+    return response.text || "Empty response";
+  } catch (error: any) {
+    console.error("AI Test failed:", error);
+    return `Error: ${error.message || JSON.stringify(error)}`;
+  }
 }
 
 // Caching helpers

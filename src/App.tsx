@@ -5,7 +5,7 @@
 
 import { useEffect } from "react";
 import PubCrawlPlanner from "./components/PubCrawlPlanner";
-import { initializeAdMob, showAppOpenAd } from "./services/admobService";
+import { initializeAdMob, showAppOpenAd, showBannerAd } from "./services/admobService";
 
 export default function App() {
   useEffect(() => {
@@ -13,6 +13,7 @@ export default function App() {
       try {
         await initializeAdMob();
         await showAppOpenAd();
+        await showBannerAd();
       } catch (e) {
         console.error("AdMob startup failed", e);
       }

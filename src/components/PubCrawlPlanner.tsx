@@ -20,7 +20,8 @@ import {
   CreditCard,
   RefreshCw,
   LocateFixed,
-  ExternalLink
+  ExternalLink,
+  Sparkles
 } from "lucide-react";
 import { 
   fetchAllAvailablePubs, 
@@ -46,6 +47,15 @@ export default function PubCrawlPlanner() {
   const [taxis, setTaxis] = useState<Taxi[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [aiStatus, setAiStatus] = useState<string | null>(null);
+
+  const checkAI = async () => {
+    setAiStatus("Testing...");
+    const { testAI } = await import("../services/pubService");
+    const result = await testAI();
+    setAiStatus(result);
+    setTimeout(() => setAiStatus(null), 5000);
+  };
 
   // Auto-detect location on mount
   useEffect(() => {
@@ -231,6 +241,22 @@ export default function PubCrawlPlanner() {
           </div>
           
           <div className="flex items-center gap-4">
+            {aiStatus && (
+              <motion.div 
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                className="text-[10px] font-mono text-orange-500 bg-orange-500/10 px-2 py-1 rounded-md border border-orange-500/20 max-w-[150px] truncate"
+              >
+                {aiStatus}
+              </motion.div>
+            )}
+            <button 
+              onClick={checkAI}
+              className="p-2 hover:bg-white/10 rounded-xl transition-colors text-white/40 hover:text-white"
+              title="Test AI Connection"
+            >
+              <Sparkles className="w-5 h-5" />
+            </button>
             <a 
               href={window.location.href} 
               target="_blank" 
