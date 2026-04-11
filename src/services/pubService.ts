@@ -1,7 +1,18 @@
 import { PubCrawl, Pub, Drink, Taxi } from "../types";
 import { GoogleGenAI, Type } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+let aiInstance: GoogleGenAI | null = null;
+
+function getAI() {
+  if (!aiInstance) {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      throw new Error("GEMINI_API_KEY is not defined. Please add it to your environment variables.");
+    }
+    aiInstance = new GoogleGenAI({ apiKey });
+  }
+  return aiInstance;
+}
 
 // Caching helpers
 const CACHE_PREFIX = "pubscout_v1_";
@@ -273,6 +284,7 @@ function getRealisticDrinks(pubName: string, tags: any): Drink[] {
 
 export async function fetchAccurateMenu(pubName: string, address: string): Promise<Drink[]> {
   try {
+    const ai = getAI();
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: `Find the current drink menu and prices for "${pubName}" at "${address}". 
@@ -464,6 +476,7 @@ export async function generatePubCrawl(
 
 export async function fetchTaxis(lat: number, lng: number, searchLocation: string): Promise<Taxi[]> {
   try {
+    const ai = getAI();
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: `Find 3-4 real, active local taxi companies or private hire services in or near "${searchLocation}". 
