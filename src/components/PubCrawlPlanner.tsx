@@ -21,6 +21,7 @@ import { generatePubCrawl } from "../services/pubService";
 import { PubCrawl, Pub } from "../types";
 import { cn } from "../lib/utils";
 import DrinkGenerator from "./DrinkGenerator";
+import MapComponent from "./MapComponent";
 
 export default function PubCrawlPlanner() {
   const [location, setLocation] = useState("");
@@ -228,6 +229,19 @@ export default function PubCrawlPlanner() {
 
             {/* Main Content: Active Pub & Next Pub */}
             <div className="lg:col-span-8 space-y-8">
+              {/* Map View */}
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.1 }}
+              >
+                <MapComponent 
+                  pubs={crawl.pubs} 
+                  selectedPubIndex={currentIndex} 
+                  onSelectPub={setCurrentIndex} 
+                />
+              </motion.div>
+
               <AnimatePresence mode="wait">
                 <motion.div
                   key={currentIndex}
