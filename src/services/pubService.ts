@@ -5,12 +5,15 @@ let aiInstance: GoogleGenAI | null = null;
 
 function getAI() {
   if (!aiInstance) {
-    const apiKey = process.env.GEMINI_API_KEY;
-    console.log("Gemini: Initializing with API key present:", !!apiKey);
+    // Use the Vite-injected environment variable
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+    
     if (!apiKey) {
-      console.error("Gemini: GEMINI_API_KEY is missing from environment. Please add it to AI Studio Settings -> Secrets.");
+      console.error("Gemini: API Key is missing from import.meta.env.VITE_GEMINI_API_KEY. Check AI Studio Secrets and rebuild.");
       throw new Error("GEMINI_API_KEY is not defined.");
     }
+    
+    console.log("Gemini: Initializing with key of length:", apiKey.length);
     aiInstance = new GoogleGenAI({ apiKey });
   }
   return aiInstance;
@@ -202,8 +205,8 @@ export async function fetchAccurateMenu(pubName: string, address: string): Promi
       Return a JSON array of objects with "name", "price", and "category" (Beer, Wine, Spirit, Cocktail, or Soft Drink).
       If you find multiple menus, pick the most recent one. 
       If no specific menu is found after searching, return [].`,
+      tools: [{ googleSearch: {} }],
       config: {
-        tools: [{ googleSearch: {} }],
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.ARRAY,
@@ -440,8 +443,8 @@ export async function fetchTaxis(lat: number, lng: number, searchLocation: strin
       Include their name, phone number, and address if available. 
       Also provide a realistic estimated flat rate or fare range for a short trip (2-5 miles) in this specific area.
       Return the data as a list of taxi services.`,
+      tools: [{ googleSearch: {} }],
       config: {
-        tools: [{ googleSearch: {} }],
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.ARRAY,
