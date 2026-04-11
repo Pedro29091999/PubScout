@@ -10,7 +10,7 @@ function getAI() {
     
     try {
       // 1. Try import.meta.env (Vite standard)
-      apiKey = (import.meta as any).env?.VITE_GEMINI_API_KEY || "";
+      apiKey = import.meta.env.VITE_GEMINI_API_KEY || "";
       
       // 2. Try process.env (Node/CommonJS style)
       if (!apiKey && typeof process !== 'undefined' && process.env) {

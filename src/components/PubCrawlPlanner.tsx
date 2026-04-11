@@ -237,7 +237,10 @@ export default function PubCrawlPlanner() {
             <div className="w-8 h-8 bg-orange-500 rounded-lg flex items-center justify-center">
               <Beer className="w-5 h-5 text-black" />
             </div>
-            <span className="font-bold text-xl tracking-tight">PubScout</span>
+            <div className="flex flex-col">
+              <span className="font-bold text-xl tracking-tight leading-none">PubScout</span>
+              <span className="text-[8px] text-white/20 font-mono">Build: {new Date().toLocaleTimeString()}</span>
+            </div>
           </div>
           
           <div className="flex items-center gap-4">
