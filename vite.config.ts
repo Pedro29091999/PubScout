@@ -9,8 +9,11 @@ export default defineConfig(({mode}) => {
     base: './',
     plugins: [react(), tailwindcss()],
     define: {
-      'process.env': JSON.stringify(env),
-      'global': {},
+      'process.env': JSON.stringify({
+        ...env,
+        GEMINI_API_KEY: env.GEMINI_API_KEY || process.env.GEMINI_API_KEY,
+      }),
+      'global': 'window',
     },
     resolve: {
       alias: {

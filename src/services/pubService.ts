@@ -6,7 +6,9 @@ let aiInstance: GoogleGenAI | null = null;
 function getAI() {
   if (!aiInstance) {
     const apiKey = process.env.GEMINI_API_KEY;
+    console.log("Gemini: Initializing with API key present:", !!apiKey);
     if (!apiKey) {
+      console.error("Gemini: GEMINI_API_KEY is missing from environment.");
       throw new Error("GEMINI_API_KEY is not defined. Please add it to your environment variables.");
     }
     aiInstance = new GoogleGenAI({ apiKey });
@@ -283,6 +285,7 @@ function getRealisticDrinks(pubName: string, tags: any): Drink[] {
 }
 
 export async function fetchAccurateMenu(pubName: string, address: string): Promise<Drink[]> {
+  console.log(`Gemini: Fetching menu for ${pubName}...`);
   try {
     const ai = getAI();
     const response = await ai.models.generateContent({
@@ -475,6 +478,7 @@ export async function generatePubCrawl(
 }
 
 export async function fetchTaxis(lat: number, lng: number, searchLocation: string): Promise<Taxi[]> {
+  console.log(`Gemini: Fetching taxis for ${searchLocation}...`);
   try {
     const ai = getAI();
     const response = await ai.models.generateContent({
