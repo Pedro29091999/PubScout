@@ -51,10 +51,14 @@ export default function PubCrawlPlanner() {
 
   const checkAI = async () => {
     setAiStatus("Testing...");
-    const { testAI } = await import("../services/pubService");
-    const result = await testAI();
-    setAiStatus(result);
-    setTimeout(() => setAiStatus(null), 5000);
+    try {
+      const { testAI } = await import("../services/pubService");
+      const result = await testAI();
+      setAiStatus(`Result: ${result}`);
+    } catch (err: any) {
+      setAiStatus(`Fatal: ${err.message}`);
+    }
+    setTimeout(() => setAiStatus(null), 10000);
   };
 
   // Auto-detect location on mount

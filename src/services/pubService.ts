@@ -26,8 +26,13 @@ function getAI() {
     }
     
     if (!apiKey) {
-      console.error("Gemini: API Key is missing. Please check AI Studio Secrets and rebuild.");
-      throw new Error("GEMINI_API_KEY is not defined.");
+      const sources = {
+        meta: !!import.meta.env.VITE_GEMINI_API_KEY,
+        proc: typeof process !== 'undefined' && !!process.env?.GEMINI_API_KEY,
+        win: typeof window !== 'undefined' && !!(window as any).GEMINI_API_KEY
+      };
+      console.error("Gemini: API Key missing.", sources);
+      throw new Error(`ERR_KEY_MISSING_${JSON.stringify(sources)}`);
     }
     
     console.log("Gemini: Initializing with key starting with:", apiKey.substring(0, 4), "length:", apiKey.length);
