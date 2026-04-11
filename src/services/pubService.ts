@@ -30,7 +30,7 @@ function getAI() {
       throw new Error("GEMINI_API_KEY is not defined.");
     }
     
-    console.log("Gemini: Initializing with key of length:", apiKey.length);
+    console.log("Gemini: Initializing with key starting with:", apiKey.substring(0, 4), "length:", apiKey.length);
     aiInstance = new GoogleGenAI({ apiKey });
   }
   return aiInstance;
