@@ -613,15 +613,24 @@ export default function PubCrawlPlanner() {
                                   <p className="text-white font-bold text-lg">No Menu Data Found</p>
                                   <p className="text-white/40 text-sm max-w-[200px] mx-auto">We couldn't find a verified menu for this venue online.</p>
                                 </div>
-                                <a 
-                                  href={`https://www.google.com/search?q=${encodeURIComponent(`${currentPub?.name} ${currentPub?.address} menu`)}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="px-8 py-3 rounded-2xl bg-orange-500 text-black font-bold text-sm hover:bg-orange-400 transition-all flex items-center gap-2"
-                                >
-                                  <Search className="w-4 h-4" />
-                                  Search Google
-                                </a>
+                                <div className="flex flex-col gap-3 w-full max-w-[240px]">
+                                  <button 
+                                    onClick={() => currentPub && performMenuFetch(currentPub)}
+                                    className="w-full py-3 rounded-2xl bg-white/10 text-white font-bold text-sm hover:bg-white/20 transition-all flex items-center justify-center gap-2"
+                                  >
+                                    <RefreshCw className="w-4 h-4" />
+                                    Retry Fetch
+                                  </button>
+                                  <a 
+                                    href={`https://www.google.com/search?q=${encodeURIComponent(`${currentPub?.name} ${currentPub?.address} menu`)}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="w-full py-3 rounded-2xl bg-orange-500 text-black font-bold text-sm hover:bg-orange-400 transition-all flex items-center justify-center gap-2"
+                                  >
+                                    <Search className="w-4 h-4" />
+                                    Search Google
+                                  </a>
+                                </div>
                               </div>
                             )}
                           </div>

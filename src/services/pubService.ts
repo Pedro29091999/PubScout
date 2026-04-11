@@ -196,11 +196,12 @@ export async function fetchAccurateMenu(pubName: string, address: string): Promi
 
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: `Find the current drink menu and prices for "${pubName}" at "${address}". 
-      ${isWetherspoons ? 'This may be a Wetherspoons venue; check their official app/website data if possible.' : ''}
-      Focus on real beers, cocktails, and spirits. 
+      contents: `Find the current drink menu and prices for "${pubName}" ${address !== 'Address unknown' ? `at "${address}"` : ''}. 
+      ${isWetherspoons ? 'This is likely a Wetherspoons venue; search for their official menu or app data.' : ''}
+      Search for real beers, ales, cocktails, and spirits. 
       Return a JSON array of objects with "name", "price", and "category" (Beer, Wine, Spirit, Cocktail, or Soft Drink).
-      If no specific menu is found, return [].`,
+      If you find multiple menus, pick the most recent one. 
+      If no specific menu is found after searching, return [].`,
       config: {
         tools: [{ googleSearch: {} }],
         responseMimeType: "application/json",
