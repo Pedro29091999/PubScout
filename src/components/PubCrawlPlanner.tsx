@@ -46,6 +46,15 @@ export default function PubCrawlPlanner() {
   const [taxis, setTaxis] = useState<Taxi[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [apiKeyMissing, setApiKeyMissing] = useState(false);
+
+  useEffect(() => {
+    // Check if API key is present (injected via Vite define)
+    const key = process.env.GEMINI_API_KEY;
+    if (!key || key === 'MY_GEMINI_API_KEY' || key === '') {
+      setApiKeyMissing(true);
+    }
+  }, []);
 
   // Auto-detect location on mount
   useEffect(() => {
@@ -185,6 +194,14 @@ export default function PubCrawlPlanner() {
     <div className="min-h-screen bg-[#0A0A0A] text-white font-sans selection:bg-orange-500/30">
       {/* Header */}
       <header className="sticky top-0 z-50 border-b border-white/10 bg-black/50 backdrop-blur-xl">
+        {apiKeyMissing && (
+          <div className="bg-orange-500/20 border-b border-orange-500/30 py-2 px-4 text-center">
+            <p className="text-xs font-bold text-orange-500 flex items-center justify-center gap-2">
+              <Info className="w-3 h-3" />
+              Gemini API Key missing. Some features like taxi search and accurate menus will be limited.
+            </p>
+          </div>
+        )}
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-orange-500 rounded-lg flex items-center justify-center">
