@@ -243,7 +243,9 @@ export default function PubCrawlPlanner() {
             </div>
             <div className="flex flex-col">
               <span className="font-bold text-xl tracking-tight leading-none">PubScout</span>
-              <span className="text-[8px] text-white/20 font-mono">Build: {new Date().toLocaleTimeString()}</span>
+              <span className="text-[8px] text-white/20 font-mono">
+                ID: {import.meta.env.VITE_BUILD_ID} | {new Date().toLocaleTimeString()}
+              </span>
             </div>
           </div>
           
