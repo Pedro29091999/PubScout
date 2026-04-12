@@ -17,7 +17,7 @@ export default defineConfig(({mode}) => {
     // We don't throw here to avoid breaking the agent's flow, but we log it clearly.
   }
 
-  const buildId = "VERIFIED_" + Math.random().toString(36).substring(7).toUpperCase();
+  const buildId = "FINAL_SYNC_V1";
   console.log('--- VITE BUILD ---');
   console.log('Build ID:', buildId);
   console.log('Key Length:', geminiKey.length);
